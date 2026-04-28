@@ -8,6 +8,7 @@ import {
   Coins,
   HandCoins,
   Handshake,
+  Lock,
   RotateCcw,
   ShipWheel,
   Sparkles,
@@ -339,6 +340,68 @@ const endNode: FlowNode = {
 
 const allNodes = [...actionTracks.flatMap((track) => track.nodes), endNode]
 
+function descendantsOf(
+  nodeMap: Map<string, FlowNode>,
+  startId: string,
+): Set<string> {
+  const visited = new Set<string>()
+  const stack = [startId]
+  while (stack.length > 0) {
+    const id = stack.pop()
+    if (id == null || visited.has(id)) continue
+    if (!nodeMap.has(id)) continue
+    visited.add(id)
+    const node = nodeMap.get(id)
+    if (node?.next) {
+      for (const next of node.next) stack.push(next)
+    }
+  }
+  return visited
+}
+
+function buildConflictMap(
+  nodes: Array<FlowNode>,
+): Map<string, Set<string>> {
+  const nodeMap = new Map(nodes.map((n) => [n.id, n]))
+  const conflicts = new Map<string, Set<string>>()
+  for (const n of nodes) conflicts.set(n.id, new Set())
+
+  for (const branchPoint of nodes) {
+    if (!branchPoint.next || branchPoint.next.length <= 1) continue
+    const childTerritories = branchPoint.next.map((childId) =>
+      descendantsOf(nodeMap, childId),
+    )
+    for (let i = 0; i < childTerritories.length; i++) {
+      for (let j = 0; j < childTerritories.length; j++) {
+        if (i === j) continue
+        for (const a of childTerritories[i]) {
+          const set = conflicts.get(a)
+          if (!set) continue
+          for (const b of childTerritories[j]) set.add(b)
+        }
+      }
+    }
+  }
+  return conflicts
+}
+
+const conflictMaps: Record<FlowGroup, Map<string, Set<string>>> = {
+  fly: buildConflictMap(actionTracks[0].nodes),
+  buy: buildConflictMap(actionTracks[1].nodes),
+  deal: buildConflictMap(actionTracks[2].nodes),
+  work: buildConflictMap(actionTracks[3].nodes),
+}
+
+function isNodeLocked(node: FlowNode, completed: Set<string>): boolean {
+  if (completed.has(node.id)) return false
+  const conflicts = conflictMaps[node.group]?.get(node.id)
+  if (!conflicts) return false
+  for (const id of conflicts) {
+    if (completed.has(id)) return true
+  }
+  return false
+}
+
 const freeActions = [
   'Trade Crew, Fuel, Parts, Cargo, Contraband, Gear and Upgrades while stopped with players in the same sector.',
   'Hire a rival’s Disgruntled Crew while stopped in the same sector by paying the bank their hire cost.',
@@ -454,6 +517,7 @@ function Home() {
       <NodeSheet
         node={selectedNode}
         isComplete={selectedNode ? completed.has(selectedNode.id) : false}
+        isLocked={selectedNode ? isNodeLocked(selectedNode, completed) : false}
         onClose={() => setSelectedNodeId(null)}
         onSelect={setSelectedNodeId}
         onToggleComplete={toggleComplete}
@@ -815,6 +879,7 @@ function TrackDossier({
                 tone={tone}
                 selected={selectedNodeId === node.id}
                 complete={completed.has(node.id)}
+                locked={isNodeLocked(node, completed)}
                 onSelect={onSelect}
                 onToggleComplete={onToggleComplete}
               />
@@ -840,6 +905,7 @@ function FlowCard({
   tone,
   selected,
   complete,
+  locked,
   onSelect,
   onToggleComplete,
 }: {
@@ -848,6 +914,7 @@ function FlowCard({
   tone: { ink: string; bg: string; mark: string }
   selected: boolean
   complete: boolean
+  locked: boolean
   onSelect: (id: string) => void
   onToggleComplete: (id: string) => void
 }) {
@@ -858,7 +925,9 @@ function FlowCard({
         'shadow-[0_2px_0_rgba(28,20,16,0.06),inset_0_1px_0_rgba(255,255,255,0.6)]',
         selected && 'ring-2 ring-[var(--rust)] ring-offset-2 ring-offset-[var(--parchment)]',
         complete && 'bg-[rgba(96,117,80,0.10)]',
+        locked && 'opacity-55 saturate-50',
       )}
+      aria-disabled={locked}
     >
       <div className="flex w-12 shrink-0 flex-col items-center justify-center gap-1 border-r border-dashed border-[var(--line-strong)] pr-3">
         <span className={cn('font-mono text-[10px] uppercase tracking-mono text-[var(--ink-fade)]')}>
@@ -908,18 +977,28 @@ function FlowCard({
         type="button"
         onClick={(e) => {
           e.stopPropagation()
+          if (locked) return
           onToggleComplete(node.id)
         }}
+        disabled={locked}
         className={cn(
           'flex size-11 shrink-0 items-center justify-center self-start rounded-full border-2 transition active:scale-90',
-          complete
-            ? 'border-[#3b4a2a] bg-[#607550] text-[var(--bone)]'
-            : 'border-[var(--line-strong)] bg-[var(--bone)] text-[var(--ink)] hover:border-[var(--rust)]',
+          locked
+            ? 'cursor-not-allowed border-[var(--line-strong)] bg-[rgba(28,20,16,0.05)] text-[var(--ink-fade)]'
+            : complete
+              ? 'border-[#3b4a2a] bg-[#607550] text-[var(--bone)]'
+              : 'border-[var(--line-strong)] bg-[var(--bone)] text-[var(--ink)] hover:border-[var(--rust)]',
         )}
         aria-pressed={complete}
-        aria-label={`Mark ${node.title} ${complete ? 'incomplete' : 'complete'}`}
+        aria-label={
+          locked
+            ? `${node.title} is locked — alternative branch was taken`
+            : `Mark ${node.title} ${complete ? 'incomplete' : 'complete'}`
+        }
       >
-        {complete ? (
+        {locked ? (
+          <Lock className="size-4" strokeWidth={2.25} />
+        ) : complete ? (
           <CheckCircle2 className="size-5" />
         ) : (
           <Circle className="size-5" />
@@ -1089,12 +1168,14 @@ function Footer() {
 function NodeSheet({
   node,
   isComplete,
+  isLocked,
   onClose,
   onSelect,
   onToggleComplete,
 }: {
   node: FlowNode | null
   isComplete: boolean
+  isLocked: boolean
   onClose: () => void
   onSelect: (id: string) => void
   onToggleComplete: (id: string) => void
@@ -1179,23 +1260,40 @@ function NodeSheet({
             </div>
             <button
               type="button"
-              onClick={() => onToggleComplete(node.id)}
+              onClick={() => {
+                if (isLocked) return
+                onToggleComplete(node.id)
+              }}
+              disabled={isLocked}
               className={cn(
                 'flex size-12 shrink-0 items-center justify-center rounded-full border-2 transition active:scale-90',
-                isComplete
-                  ? 'border-[#3b4a2a] bg-[#607550] text-[var(--bone)]'
-                  : 'border-[var(--line-strong)] bg-[var(--bone)] text-[var(--ink)]',
+                isLocked
+                  ? 'cursor-not-allowed border-[var(--line-strong)] bg-[rgba(28,20,16,0.05)] text-[var(--ink-fade)]'
+                  : isComplete
+                    ? 'border-[#3b4a2a] bg-[#607550] text-[var(--bone)]'
+                    : 'border-[var(--line-strong)] bg-[var(--bone)] text-[var(--ink)]',
               )}
               aria-pressed={isComplete}
-              aria-label="Toggle complete"
+              aria-label={isLocked ? 'Locked — alternative branch was taken' : 'Toggle complete'}
             >
-              {isComplete ? (
+              {isLocked ? (
+                <Lock className="size-4" strokeWidth={2.25} />
+              ) : isComplete ? (
                 <CheckCircle2 className="size-5" />
               ) : (
                 <Circle className="size-5" />
               )}
             </button>
           </div>
+          {isLocked && (
+            <div className="mt-3 flex items-start gap-2 rounded-sm border border-dashed border-[var(--line-strong)] bg-[rgba(28,20,16,0.04)] px-3 py-2">
+              <Lock className="mt-0.5 size-3.5 shrink-0 text-[var(--ink-fade)]" />
+              <p className="font-mono text-[10px] uppercase leading-snug tracking-mono text-[var(--ink-fade)]">
+                Locked — you took the alternative branch this turn. Reset or
+                undo the other path to enable it.
+              </p>
+            </div>
+          )}
 
           <div className="mt-5">
             <div className="serial mb-2">// ORDERS IN DETAIL</div>
