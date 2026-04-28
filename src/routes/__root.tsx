@@ -23,6 +23,15 @@ export const Route = createRootRoute({
         rel: 'stylesheet',
         href: appCss,
       },
+      {
+        rel: 'icon',
+        type: 'image/png',
+        href: '/serenity.png',
+      },
+      {
+        rel: 'apple-touch-icon',
+        href: '/serenity.png',
+      },
     ],
   }),
   shellComponent: RootDocument,

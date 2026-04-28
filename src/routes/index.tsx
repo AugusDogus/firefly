@@ -6,7 +6,6 @@ import {
   ChevronRight,
   Circle,
   Coins,
-  Compass,
   HandCoins,
   Handshake,
   RotateCcw,
@@ -22,7 +21,7 @@ import { cn } from '#/lib/utils'
 
 export const Route = createFileRoute('/')({ component: Home })
 
-type FlowGroup = 'fly' | 'buy' | 'work' | 'deal' | 'mosey'
+type FlowGroup = 'fly' | 'buy' | 'deal' | 'work'
 
 type FlowNode = {
   id: string
@@ -50,78 +49,60 @@ const actionTracks: Array<ActionTrack> = [
     glyph: 'I',
     icon: ShipWheel,
     description:
-      'Move from anywhere. Choose Full Burn for distance or Mosey for a slower turn.',
+      'Move the ship. Choose Full Burn for distance or Mosey for one quiet sector.',
     nodes: [
       {
         id: 'fly-choice',
         title: 'Choose Fly',
         eyebrow: 'Anywhere',
         group: 'fly',
-        summary: 'Start a movement action and pick Full Burn or Mosey.',
+        summary:
+          'Begin a movement action. Pick Full Burn or Mosey — they are mutually exclusive.',
         details: [
-          'You can fly from anywhere.',
-          'Full Burn and Mosey are mutually exclusive paths.',
+          'You can take Fly from any sector.',
+          'Decide between Full Burn (fast, risky) and Mosey (slow, safe).',
         ],
-        next: ['full-burn', 'mosey-move'],
+        next: ['full-burn', 'mosey'],
       },
       {
         id: 'full-burn',
         title: 'Full Burn',
-        eyebrow: 'Fast route',
+        eyebrow: 'Burn fuel',
         group: 'fly',
-        summary: 'Spend fuel, move the ship, and resolve navigation cards.',
+        summary:
+          'Spend 1 Fuel, move to an adjacent sector, then draw a Nav Card.',
         details: [
-          'Burn 1 fuel.',
-          'Move ship.',
-          'Resolve Nav card five times.',
-          'End the action after the fifth navigation resolution.',
+          'Spend 1 Fuel token to initiate Full Burn.',
+          'Move your Firefly to an adjacent sector.',
+          'Draw a Nav Card from the matching deck (Alliance for blue sectors, Border for yellow).',
+        ],
+        next: ['nav-resolve'],
+      },
+      {
+        id: 'nav-resolve',
+        title: 'Resolve Nav Card',
+        eyebrow: 'Keep Flying · Full Stop · Evade',
+        group: 'fly',
+        summary:
+          'Each Nav Card option ends in Keep Flying, Full Stop, or Evade.',
+        details: [
+          'Keep Flying: you may move again and draw another Nav Card, up to your Drive Core’s max Range.',
+          'Full Stop: ship halts in the current sector. No further movement.',
+          'Evade: move to an adjacent sector. Do not draw another Nav Card.',
+          'Drawing the Alliance Cruiser card causes a Full Stop and triggers Alliance Contact.',
         ],
         next: ['end-turn'],
       },
-    ],
-  },
-  {
-    id: 'mosey',
-    title: 'Mosey',
-    glyph: 'II',
-    icon: Compass,
-    description:
-      'Move once, then take a Standard or Shore Leave planet action.',
-    nodes: [
       {
-        id: 'mosey-move',
+        id: 'mosey',
         title: 'Mosey',
-        eyebrow: 'Any planet',
-        group: 'mosey',
-        summary: 'Move the ship once, then choose Standard or Shore Leave.',
+        eyebrow: 'Slow & quiet',
+        group: 'fly',
+        summary: 'Move 1 sector. No Fuel spent. No Nav Card drawn.',
         details: [
-          'Move ship one time.',
-          'After moving, choose either Standard or Shore Leave.',
-        ],
-        next: ['mosey-standard', 'shore-leave'],
-      },
-      {
-        id: 'mosey-standard',
-        title: 'Standard',
-        eyebrow: 'Planet option',
-        group: 'mosey',
-        summary: 'Take the normal planet action available at the destination.',
-        details: [
-          'Use the standard option shown for the planet or location.',
-          'End afterward.',
-        ],
-        next: ['end-turn'],
-      },
-      {
-        id: 'shore-leave',
-        title: 'Shore Leave',
-        eyebrow: 'Crew recovery',
-        group: 'mosey',
-        summary: 'Pay crew and remove Disgruntled markers.',
-        details: [
-          'Pay $100 per crew member.',
-          'Remove Disgruntled.',
-          'You must pay for all crew on shore leave.',
+          'Move your Firefly exactly 1 sector.',
+          'Do not spend a Fuel token.',
+          'Do not draw from the Nav decks.',
         ],
         next: ['end-turn'],
       },
@@ -130,41 +111,103 @@ const actionTracks: Array<ActionTrack> = [
   {
     id: 'buy',
     title: 'Buy',
-    glyph: 'III',
+    glyph: 'II',
     icon: HandCoins,
     description:
-      'Visit a merchant, consider cards, and trade goods, fuel, or parts.',
+      'At a Supply Planet. Buy Crew, Gear and Upgrades — or take Shore Leave.',
     nodes: [
       {
         id: 'buy-start',
-        title: 'Buy',
-        eyebrow: 'Merchant',
+        title: 'Choose Buy',
+        eyebrow: 'Supply Planet',
         group: 'buy',
-        summary: 'Start a merchant action.',
+        summary:
+          'Your Firefly must be in a sector with a Supply Planet. Pick one of two paths.',
         details: [
-          'Use this action at a merchant.',
-          'You will consider three cards and pick two.',
+          'Buy Supply Cards (Crew / Gear / Ship Upgrades) and restock Fuel & Parts, OR',
+          'Use this Buy Action for Shore Leave instead.',
         ],
-        next: ['buy-market'],
+        next: ['buy-supply', 'shore-leave'],
       },
       {
-        id: 'buy-market',
-        title: 'Consider 3, Pick 2',
-        eyebrow: 'Market',
+        id: 'buy-supply',
+        title: 'Consider 3, Buy 2',
+        eyebrow: 'Supply deck',
         group: 'buy',
-        summary: 'Look at three options and keep two of them available.',
-        details: ['Consider three.', 'Pick two.'],
-        next: ['buy-goods'],
-      },
-      {
-        id: 'buy-goods',
-        title: 'Buy or Sell Goods',
-        eyebrow: 'Trade',
-        group: 'buy',
-        summary: 'Resolve purchases, sales, fuel, or parts.',
+        summary:
+          'Look through the discard pile, draw face-down to fill 3, then pay the bank for up to 2.',
         details: [
-          'Buy or sell goods.',
-          'Buy fuel or parts as allowed by the merchant.',
+          'Pull up to 3 cards from the matching Supply discard pile to Consider.',
+          'For each card less than 3 you pulled, draw 1 face-down card from the Supply deck.',
+          'Pay the bank for up to 2 of the 3 cards (you don’t have to buy any).',
+          'Unbought cards go face-up to the discard pile.',
+          'You may also buy Fuel ($100 each) and Parts ($300 each) from the bank.',
+        ],
+        next: ['end-turn'],
+      },
+      {
+        id: 'shore-leave',
+        title: 'Shore Leave',
+        eyebrow: 'Crew recovery',
+        group: 'buy',
+        summary:
+          'Pay $100 per Crew (Disgruntled or not), then remove every Disgruntled token.',
+        details: [
+          'Pay the bank $100 for each Crew on the ship — Disgruntled or not.',
+          'After paying, remove all Disgruntled tokens from your Crew.',
+          'Shore Leave replaces buying Supply Cards on this Buy Action.',
+        ],
+        next: ['end-turn'],
+      },
+    ],
+  },
+  {
+    id: 'deal',
+    title: 'Deal',
+    glyph: 'III',
+    icon: Sparkles,
+    description: 'At a Contact. Take Jobs — and sell goods if you’re Solid.',
+    nodes: [
+      {
+        id: 'deal-start',
+        title: 'Choose Deal',
+        eyebrow: 'Contact sector',
+        group: 'deal',
+        summary:
+          'Your Firefly must be in the sector of the Contact you want to Deal with.',
+        details: [
+          'Each Contact has their own deck of Jobs.',
+          'Max 3 inactive Jobs in your hand at any time.',
+        ],
+        next: ['deal-consider'],
+      },
+      {
+        id: 'deal-consider',
+        title: 'Consider 3, Accept 2',
+        eyebrow: 'Job deck',
+        group: 'deal',
+        summary:
+          'Look through the Contact’s discard pile, draw to fill 3, then accept up to 2 Jobs.',
+        details: [
+          'Pull up to 3 Jobs from the Contact’s discard pile to Consider.',
+          'For each card less than 3 you pulled, draw 1 face-down card from the deck.',
+          'Accept up to 2 of the 3 (you don’t have to accept any).',
+          'Unaccepted cards go face-up to the discard pile.',
+          'Inactive Jobs are kept concealed in your hand until you Work them.',
+        ],
+        next: ['deal-solid'],
+      },
+      {
+        id: 'deal-solid',
+        title: 'If Solid: Sell Goods',
+        eyebrow: 'Solid only',
+        group: 'deal',
+        summary:
+          'When Solid with this Contact, you may also sell Cargo and Contraband to them.',
+        details: [
+          'Becoming Solid happens automatically when you finish a Job for that Contact.',
+          'When Solid, sell prices are listed on the Contact side of the Job Cards.',
+          'Receiving a Warrant while Working that Contact’s Job loses Solid status.',
         ],
         next: ['end-turn'],
       },
@@ -176,106 +219,103 @@ const actionTracks: Array<ActionTrack> = [
     glyph: 'IV',
     icon: Users,
     description:
-      'Run a job at its location, or take Make-Work for a smaller payout.',
+      'Advance one Job — or take Make-Work for a guaranteed payout.',
     nodes: [
       {
         id: 'work-start',
-        title: 'Work',
-        eyebrow: 'Location per job',
+        title: 'Choose Work',
+        eyebrow: 'Job location',
         group: 'work',
-        summary: 'Start work at the location required by the job.',
+        summary:
+          'Be at the Pick-Up Location (Delivery) or Target Location (Crime). Or take Make-Work at any planet.',
         details: [
-          'Work is largely defined by the job card.',
-          "Pay each crew member's hire fee at payout.",
+          'A Work Action advances a single Job.',
+          'You may have up to 3 Active Jobs at once, in addition to 3 Inactive in hand.',
+          'Once placed face-up beside your Ship Card, a Job is Active.',
         ],
         next: ['work-kind'],
       },
       {
         id: 'work-kind',
-        title: 'Job Card or Make-Work',
-        eyebrow: 'Choose work',
+        title: 'Job or Make-Work',
+        eyebrow: 'Pick a path',
         group: 'work',
-        summary: 'Choose the printed job or a Make-Work action.',
+        summary: 'Work the printed Job, or take a guaranteed Make-Work payout.',
         details: [
-          'Job card follows the card text.',
-          'Make-Work collects $200.',
+          'Work a Job: follow the four steps — Equip, Confirm Needs, Do the Job, Outcome.',
+          'Make-Work: at any planet with nothing to do, take $200 from the bank and end.',
         ],
-        next: ['work-resolve'],
+        next: ['work-equip', 'make-work'],
       },
       {
-        id: 'work-resolve',
-        title: 'Work per Job Card',
-        eyebrow: 'Resolve',
-        group: 'work',
-        summary: 'Complete the job instructions and handle payout.',
-        details: [
-          'Resolve the work exactly as the job defines.',
-          "Pay each crew member's hire fee at payout.",
-          'Become solid with the contact when complete.',
-        ],
-        next: ['work-solid'],
-      },
-      {
-        id: 'work-solid',
-        title: 'Solid?',
-        eyebrow: 'Contact status',
+        id: 'work-equip',
+        title: 'Equip Crew',
+        eyebrow: 'Step 1',
         group: 'work',
         summary:
-          'If the job makes you solid with the contact, record that status.',
+          'Lock in which Gear each Crew is carrying. Each Crew or Leader may carry 1 Gear.',
         details: [
-          'Yes: mark solid with the contact.',
-          'No: end without changing contact status.',
+          'Once Working, Gear cannot change hands until the attempt is over.',
+          'Crew or Gear left on the ship cannot be used during the Job.',
+          'If a Crew with Gear is killed, that Gear returns to the ship.',
+        ],
+        next: ['work-needs'],
+      },
+      {
+        id: 'work-needs',
+        title: 'Confirm Needs',
+        eyebrow: 'Step 2',
+        group: 'work',
+        summary:
+          'The Crew you brought must meet every Skill / Keyword listed in the Job’s Needs tab.',
+        details: [
+          'If Needs are not met, the Job cannot be advanced this turn.',
+          'Some Jobs replace Needs with a Skill Test taken at the listed step.',
+          'Jobs with no Needs tab have no prerequisites.',
+        ],
+        next: ['work-do'],
+      },
+      {
+        id: 'work-do',
+        title: 'Do the Job · Misbehave',
+        eyebrow: 'Step 3',
+        group: 'work',
+        summary:
+          'Follow the Job text. Illegal Jobs require Misbehaving — draw the listed number of cards.',
+        details: [
+          'Legal: load Cargo, deliver, etc. — follow the Job text exactly.',
+          'Illegal: draw and resolve Misbehave Cards one at a time. You can’t bail out early.',
+          'Each Misbehave card ends in Proceed, Attempt Botched, or Warrant Issued.',
+          'Botched: try again next turn. Warrant Issued: gain a Warrant and discard the Job.',
+        ],
+        next: ['work-payout'],
+      },
+      {
+        id: 'work-payout',
+        title: 'Get Paid · Pay Cut',
+        eyebrow: 'Step 4',
+        group: 'work',
+        summary:
+          'Take the Pay listed, become Solid with the Contact, then pay each Crew their Cut — or they go Disgruntled.',
+        details: [
+          'Take Credits from the bank equal to the Job’s Pay (plus any Profession Bonus, paid once).',
+          'Slide the completed Job under your Ship Card to record Solid status with that Contact.',
+          'Pay each Crew the Cut printed on their card — even Crew that didn’t work the Job.',
+          'Any Crew you skip immediately gets a Disgruntled token.',
+          'Leaders are Entrepreneurs and never take a Cut.',
         ],
         next: ['end-turn'],
       },
-    ],
-  },
-  {
-    id: 'deal',
-    title: 'Deal',
-    glyph: 'V',
-    icon: Sparkles,
-    description: 'Meet a contact, choose opportunities, and set crew or gear.',
-    nodes: [
       {
-        id: 'deal-start',
-        title: 'Deal',
-        eyebrow: 'Contact',
-        group: 'deal',
-        summary: 'Start a contact action.',
-        details: ['Use this with a contact.', 'Consider three and pick two.'],
-        next: ['deal-pick'],
-      },
-      {
-        id: 'deal-pick',
-        title: 'Consider 3, Pick 2',
-        eyebrow: 'Contact offer',
-        group: 'deal',
-        summary: 'Review three options from the contact and choose two.',
-        details: ['Consider three.', 'Pick two.'],
-        next: ['deal-crew'],
-      },
-      {
-        id: 'deal-crew',
-        title: 'Set Crew & Gear',
-        eyebrow: 'Loadout',
-        group: 'deal',
-        summary: 'Update crew and gear from the chosen options.',
+        id: 'make-work',
+        title: 'Make-Work',
+        eyebrow: 'No Job? No problem.',
+        group: 'work',
+        summary:
+          'At any sector with a planet, take $200 from the bank instead of Working a Job.',
         details: [
-          'Set crew and gear as allowed by the deal.',
-          'Check whether you are solid.',
-        ],
-        next: ['deal-solid'],
-      },
-      {
-        id: 'deal-solid',
-        title: 'Solid?',
-        eyebrow: 'Contact status',
-        group: 'deal',
-        summary: 'Branch based on whether you are solid with the contact.',
-        details: [
-          'Yes: apply the solid outcome.',
-          'No: continue without that contact benefit.',
+          'No Crew Cut is paid for Make-Work.',
+          'No Solid status changes — this is just a small payday.',
         ],
         next: ['end-turn'],
       },
@@ -285,26 +325,30 @@ const actionTracks: Array<ActionTrack> = [
 
 const endNode: FlowNode = {
   id: 'end-turn',
-  title: 'End',
+  title: 'End the Action',
   eyebrow: 'Action complete',
   group: 'fly',
-  summary: 'Finish the selected action.',
-  details: ['After completing the selected path, end the action.'],
+  summary:
+    'Finish this action. You take 2 different actions per turn — never the same one twice.',
+  details: [
+    'After your 2 actions are done, play passes to your left.',
+    'You may also take Free Actions (trade, hire, browse discards) at any time without using an action.',
+  ],
 }
 
 const allNodes = [...actionTracks.flatMap((track) => track.nodes), endNode]
 
 const freeActions = [
-  'Send money to another player from anywhere.',
-  'Trade with another player in the same sector.',
-  'Look through discards at any time.',
+  'Trade Crew, Fuel, Parts, Cargo, Contraband, Gear and Upgrades with players in the same sector.',
+  'Hire a rival’s Disgruntled Crew in the same sector by paying the bank their hire cost.',
+  'Look through any discard pile at any time.',
 ]
 
 const disgruntledNotes = [
-  'Pay all crew for every job, or unpaid crew become Disgruntled.',
-  'Disgruntled crew can be poached by other captains.',
-  'Disgruntled crew twice: that crew member leaves.',
-  'Disgruntled captain twice: fire all crew.',
+  'A Crew you don’t pay their Cut after a Job becomes Disgruntled.',
+  'A Disgruntled Crew can be poached by another captain in the same sector for their hire fee.',
+  'A second Disgruntled token sends a Crew jumping ship — discarded back to the Supply deck.',
+  'Leaders are Lucky: when killed they return Disgruntled instead. A second token fires every other Crew.',
 ]
 
 const trackTone: Record<FlowGroup, { ink: string; bg: string; mark: string }> =
@@ -314,25 +358,20 @@ const trackTone: Record<FlowGroup, { ink: string; bg: string; mark: string }> =
       bg: 'bg-[rgba(177,59,28,0.08)]',
       mark: 'bg-[#b13b1c]',
     },
-    mosey: {
-      ink: 'text-[#2c5e5b]',
-      bg: 'bg-[rgba(44,94,91,0.08)]',
-      mark: 'bg-[#2c5e5b]',
-    },
     buy: {
       ink: 'text-[#6f4a14]',
       bg: 'bg-[rgba(201,138,50,0.14)]',
       mark: 'bg-[#c98a32]',
     },
-    work: {
-      ink: 'text-[#3b4a2a]',
-      bg: 'bg-[rgba(96,117,80,0.14)]',
-      mark: 'bg-[#607550]',
-    },
     deal: {
       ink: 'text-[#5a2a4a]',
       bg: 'bg-[rgba(110,55,90,0.12)]',
       mark: 'bg-[#7a3961]',
+    },
+    work: {
+      ink: 'text-[#3b4a2a]',
+      bg: 'bg-[rgba(96,117,80,0.14)]',
+      mark: 'bg-[#607550]',
     },
   }
 
@@ -490,18 +529,24 @@ function Hero({ progress }: { progress: number }) {
       </h1>
 
       <p className="mt-3 max-w-prose font-pulp text-[1.02rem] italic leading-snug text-[var(--ink-soft)] sm:text-lg">
-        A pocket-sized field manual for the working captain — pick an action,
-        read the orders, and check off your moves while you steal the sky.
+        A pocket-sized field manual for the working captain. Each turn you
+        take <span className="not-italic font-mono text-[0.92em] text-[var(--rust-deep)]">2 different actions</span> —
+        never the same one twice. Pick a route, read the orders, check off
+        your moves.
       </p>
 
       <div className="mt-5 grid grid-cols-3 gap-2 font-mono text-[10px] uppercase tracking-mono text-[var(--ink-soft)]">
-        <Telemetry label="Actions" value="5" hint="paths" />
+        <Telemetry label="Actions" value="2" hint="per turn" />
+        <Telemetry
+          label="Tracks"
+          value={`${actionTracks.length}`}
+          hint="paths"
+        />
         <Telemetry
           label="Progress"
           value={`${progress}%`}
           hint="checked"
         />
-        <Telemetry label="Crew" value="∞" hint="roster" />
       </div>
     </section>
   )
