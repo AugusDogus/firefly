@@ -208,6 +208,7 @@ const actionTracks: Array<ActionTrack> = [
           'Becoming Solid happens automatically when you finish a Job for that Contact.',
           'When Solid, sell prices are listed on the Contact side of the Job Cards.',
           'Receiving a Warrant while Working that Contact’s Job loses Solid status.',
+          'Any Warrant also loses Harken rep; you can’t become Solid with Harken while Wanted.',
         ],
         next: ['end-turn'],
       },
@@ -227,7 +228,7 @@ const actionTracks: Array<ActionTrack> = [
         eyebrow: 'Job location',
         group: 'work',
         summary:
-          'Be at the Pick-Up Location (Delivery) or Target Location (Crime). Or take Make-Work at any planet.',
+          'Be at the Pick-Up Location (Delivery) or Target Location (Crime). Or take Make-Work at a planet if you have nothing to do.',
         details: [
           'A Work Action advances a single Job.',
           'You may have up to 3 Active Jobs at once, in addition to 3 Inactive in hand.',
@@ -286,7 +287,7 @@ const actionTracks: Array<ActionTrack> = [
           'Legal: load Cargo, deliver, etc. — follow the Job text exactly.',
           'Illegal: draw and resolve Misbehave Cards one at a time. You can’t bail out early.',
           'Each Misbehave card ends in Proceed, Attempt Botched, or Warrant Issued.',
-          'Botched: try again next turn. Warrant Issued: gain a Warrant and discard the Job.',
+          'Botched: try again on a future turn. Warrant Issued: gain a Warrant, discard the Job, and lose applicable rep.',
         ],
         next: ['work-payout'],
       },
@@ -312,7 +313,7 @@ const actionTracks: Array<ActionTrack> = [
         eyebrow: 'No Job? No problem.',
         group: 'work',
         summary:
-          'At any sector with a planet, take $200 from the bank instead of Working a Job.',
+          'At any sector with a planet, if you have nothing to do, take $200 from the bank instead of Working a Job.',
         details: [
           'No Crew Cut is paid for Make-Work.',
           'No Solid status changes — this is just a small payday.',
@@ -329,26 +330,26 @@ const endNode: FlowNode = {
   eyebrow: 'Action complete',
   group: 'fly',
   summary:
-    'Finish this action. You take 2 different actions per turn — never the same one twice.',
+    'Finish this action. You may take 2 different actions per turn — never the same one twice.',
   details: [
-    'After your 2 actions are done, play passes to your left.',
-    'You may also take Free Actions (trade, hire, browse discards) at any time without using an action.',
+    'After you’re done with your actions, play passes to your left.',
+    'You may also trade or hire Disgruntled Crew while stopped in the same sector without using an action.',
   ],
 }
 
 const allNodes = [...actionTracks.flatMap((track) => track.nodes), endNode]
 
 const freeActions = [
-  'Trade Crew, Fuel, Parts, Cargo, Contraband, Gear and Upgrades with players in the same sector.',
-  'Hire a rival’s Disgruntled Crew in the same sector by paying the bank their hire cost.',
-  'Look through any discard pile at any time.',
+  'Trade Crew, Fuel, Parts, Cargo, Contraband, Gear and Upgrades while stopped with players in the same sector.',
+  'Hire a rival’s Disgruntled Crew while stopped in the same sector by paying the bank their hire cost.',
+  'Browse public discard piles outside your turn to plan Buy and Deal choices.',
 ]
 
 const disgruntledNotes = [
   'A Crew you don’t pay their Cut after a Job becomes Disgruntled.',
-  'A Disgruntled Crew can be poached by another captain in the same sector for their hire fee.',
-  'A second Disgruntled token sends a Crew jumping ship — discarded back to the Supply deck.',
-  'Leaders are Lucky: when killed they return Disgruntled instead. A second token fires every other Crew.',
+  'A Disgruntled Crew can be poached by another captain stopped in the same sector for their hire fee.',
+  'A second Disgruntled token sends a Crew jumping ship — discarded to their Supply discard pile.',
+  'Leaders are Lucky: when killed they return Disgruntled instead. A second token fires every other Crew, then clears the Leader’s token.',
 ]
 
 const trackTone: Record<FlowGroup, { ink: string; bg: string; mark: string }> =
@@ -530,7 +531,7 @@ function Hero({ progress }: { progress: number }) {
 
       <p className="mt-3 max-w-prose font-pulp text-[1.02rem] italic leading-snug text-[var(--ink-soft)] sm:text-lg">
         A pocket-sized field manual for the working captain. Each turn you
-        take <span className="not-italic font-mono text-[0.92em] text-[var(--rust-deep)]">2 different actions</span> —
+        may take <span className="not-italic font-mono text-[0.92em] text-[var(--rust-deep)]">2 different actions</span> —
         never the same one twice. Pick a route, read the orders, check off
         your moves.
       </p>
@@ -958,7 +959,7 @@ function ReferenceCards() {
     <section className="mt-10 grid gap-4">
       <ReferenceBlock
         title="Free Actions"
-        kicker="Anywhere · Anytime"
+        kicker="No Action Used"
         icon={Coins}
         tone="brass"
         items={freeActions}
