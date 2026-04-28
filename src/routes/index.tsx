@@ -3,6 +3,8 @@ import {
   AlertTriangle,
   ArrowDown,
   ArrowRight,
+  ArrowUpRight,
+  BookOpen,
   CheckCircle2,
   ChevronRight,
   Circle,
@@ -1341,6 +1343,16 @@ function Footer() {
         Player aid for the Firefly board game. Verify any disagreement against
         the printed rulebook.
       </p>
+      <a
+        href="https://fgbradleys.com/wp-content/uploads/rules/FireflyRules.pdf"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-3 inline-flex items-center gap-1.5 rounded-sm border border-[var(--line-strong)] bg-[var(--bone)] px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--ink)] transition hover:border-[var(--rust)] active:scale-95"
+      >
+        <BookOpen className="size-3" />
+        Open the Rulebook
+        <ArrowUpRight className="size-3 text-[var(--ink-fade)]" />
+      </a>
     </footer>
   )
 }
