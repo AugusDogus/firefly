@@ -571,7 +571,7 @@ function Home() {
         onReset={() => setCompleted(new Set())}
       />
 
-      <main className="mx-auto w-full max-w-3xl px-4 pb-32 pt-5 sm:px-6">
+      <main className="mx-auto w-full max-w-3xl px-4 pb-8 pt-5 sm:px-6">
         <Hero actionsUsed={actionsUsed} />
 
         <TrackSelector
