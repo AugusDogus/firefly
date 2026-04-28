@@ -11,33 +11,11 @@ Not affiliated with Gale Force Nine or 20th Century Fox. Firefly is &copy; 20th 
 - shadcn/ui
 - Bun
 
-## Develop
+## Quickstart
 
 ```bash
+git clone git@github.com:AugusDogus/firefly.git
+cd firefly
 bun install
-bun run dev          # http://localhost:3000
+bun dev
 ```
-
-## Build
-
-```bash
-bun run build
-bun run preview
-```
-
-## Other scripts
-
-```bash
-bun run test
-bun run lint
-bun run format
-bun run check
-```
-
-## Layout
-
-- `src/routes/__root.tsx`: document shell, head metadata, favicon
-- `src/routes/index.tsx`: turn-flow chart, tracks, reference cards, drawer
-- `src/styles.css`: design tokens, paper texture, type stack
-- `src/components/ui/`: shadcn primitives
-- `public/serenity.png`: favicon / PWA icon
