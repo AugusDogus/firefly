@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import {
   AlertTriangle,
+  ArrowDown,
   ArrowRight,
   CheckCircle2,
   ChevronRight,
@@ -32,6 +33,7 @@ type FlowNode = {
   summary: string
   details: Array<string>
   next?: Array<string>
+  optional?: boolean
 }
 
 type ActionTrack = {
@@ -212,6 +214,7 @@ const actionTracks: Array<ActionTrack> = [
           'Any Warrant also loses Harken rep; you can’t become Solid with Harken while Wanted.',
         ],
         next: ['end-turn'],
+        optional: true,
       },
     ],
   },
@@ -392,8 +395,86 @@ const conflictMaps: Record<FlowGroup, Map<string, Set<string>>> = {
   work: buildConflictMap(actionTracks[3].nodes),
 }
 
-function isNodeLocked(node: FlowNode, completed: Set<string>): boolean {
+const trackNodeIds = new Set(
+  actionTracks.flatMap((t) => t.nodes.map((n) => n.id)),
+)
+
+const MAX_ACTIONS_PER_TURN = 2
+
+function getEngagedTracks(completed: Set<string>): Set<FlowGroup> {
+  const engaged = new Set<FlowGroup>()
+  for (const track of actionTracks) {
+    if (track.nodes.some((n) => completed.has(n.id))) engaged.add(track.id)
+  }
+  return engaged
+}
+
+function isTrackActionLocked(
+  trackId: FlowGroup,
+  engaged: Set<FlowGroup>,
+): boolean {
+  if (engaged.has(trackId)) return false
+  return engaged.size >= MAX_ACTIONS_PER_TURN
+}
+
+function leadsToCompletedExit(
+  nodeId: string,
+  nodeMap: Map<string, FlowNode>,
+  completed: Set<string>,
+): boolean {
+  const node = nodeMap.get(nodeId)
+  if (!node) return false
+  if (!completed.has(node.id)) return false
+  if (!node.next || node.next.length === 0) return true
+
+  let allChildrenSkippable = true
+  let anyMandatoryReachesExit = false
+
+  for (const childId of node.next) {
+    const child = nodeMap.get(childId)
+    if (!child) {
+      return true
+    }
+    if (child.optional) continue
+    allChildrenSkippable = false
+    if (leadsToCompletedExit(childId, nodeMap, completed)) {
+      anyMandatoryReachesExit = true
+    }
+  }
+
+  return allChildrenSkippable || anyMandatoryReachesExit
+}
+
+function isTrackComplete(
+  track: ActionTrack,
+  completed: Set<string>,
+): boolean {
+  const nodeMap = new Map(track.nodes.map((n) => [n.id, n]))
+  const root = track.nodes[0]
+  if (!root) return false
+  return leadsToCompletedExit(root.id, nodeMap, completed)
+}
+
+function getCompletedTracks(completed: Set<string>): Set<FlowGroup> {
+  const done = new Set<FlowGroup>()
+  for (const track of actionTracks) {
+    if (isTrackComplete(track, completed)) done.add(track.id)
+  }
+  return done
+}
+
+function isNodeLocked(
+  node: FlowNode,
+  completed: Set<string>,
+  engaged: Set<FlowGroup>,
+): boolean {
   if (completed.has(node.id)) return false
+  if (
+    trackNodeIds.has(node.id) &&
+    isTrackActionLocked(node.group, engaged)
+  ) {
+    return true
+  }
   const conflicts = conflictMaps[node.group]?.get(node.id)
   if (!conflicts) return false
   for (const id of conflicts) {
@@ -456,8 +537,18 @@ function Home() {
     (track) => focusedTrack === 'all' || track.id === focusedTrack,
   )
 
+  const engagedTracks = useMemo(
+    () => getEngagedTracks(completed),
+    [completed],
+  )
+  const completedTracks = useMemo(
+    () => getCompletedTracks(completed),
+    [completed],
+  )
+
   const totalNodes = allNodes.length
-  const progress = Math.round((completed.size / totalNodes) * 100)
+  const actionsUsed = engagedTracks.size
+  const actionsCompleted = completedTracks.size
 
   const toggleComplete = (nodeId: string) => {
     setCompleted((current) => {
@@ -474,19 +565,20 @@ function Home() {
   return (
     <div className="no-tap-highlight relative min-h-screen text-[var(--ink)]">
       <TopStrip
-        progress={progress}
+        actionsUsed={actionsUsed}
         completedCount={completed.size}
         totalCount={totalNodes}
         onReset={() => setCompleted(new Set())}
       />
 
       <main className="mx-auto w-full max-w-3xl px-4 pb-32 pt-5 sm:px-6">
-        <Hero progress={progress} />
+        <Hero actionsUsed={actionsUsed} />
 
         <TrackSelector
           focused={focusedTrack}
           onSelect={setFocusedTrack}
           completed={completed}
+          engagedTracks={engagedTracks}
         />
 
         <section className="mt-6 flex flex-col gap-7">
@@ -496,6 +588,7 @@ function Home() {
               track={track}
               index={idx}
               completed={completed}
+              engagedTracks={engagedTracks}
               onSelect={(id) => setSelectedNodeId(id)}
               onToggleComplete={toggleComplete}
               selectedNodeId={selectedNode?.id ?? null}
@@ -517,22 +610,33 @@ function Home() {
       <NodeSheet
         node={selectedNode}
         isComplete={selectedNode ? completed.has(selectedNode.id) : false}
-        isLocked={selectedNode ? isNodeLocked(selectedNode, completed) : false}
+        isLocked={
+          selectedNode
+            ? isNodeLocked(selectedNode, completed, engagedTracks)
+            : false
+        }
         onClose={() => setSelectedNodeId(null)}
         onSelect={setSelectedNodeId}
         onToggleComplete={toggleComplete}
+      />
+
+      <EndTurnFab
+        visible={
+          actionsCompleted >= MAX_ACTIONS_PER_TURN &&
+          !completed.has(endNode.id)
+        }
       />
     </div>
   )
 }
 
 function TopStrip({
-  progress,
+  actionsUsed,
   completedCount,
   totalCount,
   onReset,
 }: {
-  progress: number
+  actionsUsed: number
   completedCount: number
   totalCount: number
   onReset: () => void
@@ -544,6 +648,8 @@ function TopStrip({
     ).padStart(4, '0')}`
     return stamp
   }, [completedCount])
+
+  const turnComplete = actionsUsed >= MAX_ACTIONS_PER_TURN
 
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--line-strong)] bg-[rgba(243,231,201,0.92)] backdrop-blur">
@@ -558,7 +664,14 @@ function TopStrip({
           <span className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--ink-fade)]">
             <span className="inline-block size-1.5 shrink-0 rounded-full bg-[var(--rust)]" />
             <span className="truncate">
-              {serial} · {progress}%
+              {serial} ·{' '}
+              <span
+                className={cn(
+                  turnComplete && 'text-[var(--rust-deep)]',
+                )}
+              >
+                {actionsUsed}/{MAX_ACTIONS_PER_TURN} actions
+              </span>
             </span>
           </span>
         </div>
@@ -576,7 +689,8 @@ function TopStrip({
   )
 }
 
-function Hero({ progress }: { progress: number }) {
+function Hero({ actionsUsed }: { actionsUsed: number }) {
+  const turnComplete = actionsUsed >= MAX_ACTIONS_PER_TURN
   return (
     <section className="rise-in mt-2">
       <div className="flex items-center gap-2">
@@ -601,17 +715,18 @@ function Hero({ progress }: { progress: number }) {
       </p>
 
       <div className="mt-5 grid grid-cols-3 gap-2 font-mono text-[10px] uppercase tracking-mono text-[var(--ink-soft)]">
-        <Telemetry label="Actions" value="2" hint="per turn" />
+        <Telemetry
+          label="Used"
+          value={`${actionsUsed}/${MAX_ACTIONS_PER_TURN}`}
+          hint={turnComplete ? 'turn done' : 'actions'}
+          accent={turnComplete}
+        />
         <Telemetry
           label="Tracks"
           value={`${actionTracks.length}`}
           hint="paths"
         />
-        <Telemetry
-          label="Progress"
-          value={`${progress}%`}
-          hint="checked"
-        />
+        <Telemetry label="Per Turn" value="2" hint="max actions" />
       </div>
     </section>
   )
@@ -621,15 +736,27 @@ function Telemetry({
   label,
   value,
   hint,
+  accent = false,
 }: {
   label: string
   value: string
   hint: string
+  accent?: boolean
 }) {
   return (
-    <div className="relative overflow-hidden border border-[var(--line-strong)] bg-[rgba(247,238,212,0.6)] px-2.5 py-2">
+    <div
+      className={cn(
+        'relative overflow-hidden border border-[var(--line-strong)] bg-[rgba(247,238,212,0.6)] px-2.5 py-2',
+        accent && 'border-[var(--rust)] bg-[rgba(177,59,28,0.08)]',
+      )}
+    >
       <div className="serial">{label}</div>
-      <div className="mt-0.5 font-display text-xl leading-none text-[var(--ink)]">
+      <div
+        className={cn(
+          'mt-0.5 font-display text-xl leading-none text-[var(--ink)]',
+          accent && 'text-[var(--rust-deep)]',
+        )}
+      >
         {value}
       </div>
       <div className="mt-0.5 text-[9px] uppercase tracking-mono text-[var(--ink-fade)]">
@@ -644,10 +771,12 @@ function TrackSelector({
   focused,
   onSelect,
   completed,
+  engagedTracks,
 }: {
   focused: FlowGroup | 'all'
   onSelect: (focus: FlowGroup | 'all') => void
   completed: Set<string>
+  engagedTracks: Set<FlowGroup>
 }) {
   return (
     <section className="mt-6">
@@ -680,6 +809,7 @@ function TrackSelector({
             'stamp-rotate-2',
             'stamp-rotate-1',
           ] as const
+          const locked = isTrackActionLocked(track.id, engagedTracks)
           return (
             <StampPill
               key={track.id}
@@ -691,6 +821,7 @@ function TrackSelector({
               tone={tones[idx % tones.length]}
               rotate={rotates[idx % rotates.length]}
               count={`${completedInTrack}/${track.nodes.length}`}
+              locked={locked}
             />
           )
         })}
@@ -708,6 +839,7 @@ function StampPill({
   tone,
   rotate,
   count,
+  locked = false,
 }: {
   active: boolean
   onClick: () => void
@@ -717,6 +849,7 @@ function StampPill({
   tone: 'rust' | 'ink' | 'brass'
   rotate: string
   count: string
+  locked?: boolean
 }) {
   const stampClass =
     tone === 'rust'
@@ -731,21 +864,26 @@ function StampPill({
       onClick={onClick}
       className={cn(
         'group relative flex w-[5.6rem] shrink-0 flex-col items-center gap-1 px-1 py-2 transition active:scale-95',
-        active
-          ? 'opacity-100'
-          : 'opacity-65 hover:opacity-100',
+        active ? 'opacity-100' : 'opacity-65 hover:opacity-100',
+        locked && !active && 'opacity-40 saturate-50',
       )}
       aria-pressed={active}
+      aria-disabled={locked}
     >
       <div
         className={cn(
-          'stamp smudge flex size-[68px] items-center justify-center rounded-full text-[22px]',
+          'stamp smudge relative flex size-[68px] items-center justify-center rounded-full text-[22px]',
           stampClass,
           rotate,
           active && 'shadow-[0_3px_0_rgba(28,20,16,0.18)]',
         )}
       >
         {Icon ? <Icon className="size-6" strokeWidth={1.75} /> : <span>{glyph}</span>}
+        {locked && (
+          <span className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full border border-[var(--line-strong)] bg-[var(--parchment)] text-[var(--ink-fade)]">
+            <Lock className="size-3" strokeWidth={2.25} />
+          </span>
+        )}
       </div>
       <span
         className={cn(
@@ -812,6 +950,7 @@ function TrackDossier({
   track,
   index,
   completed,
+  engagedTracks,
   onSelect,
   onToggleComplete,
   selectedNodeId,
@@ -819,6 +958,7 @@ function TrackDossier({
   track: ActionTrack
   index: number
   completed: Set<string>
+  engagedTracks: Set<FlowGroup>
   onSelect: (id: string) => void
   onToggleComplete: (id: string) => void
   selectedNodeId: string | null
@@ -826,13 +966,16 @@ function TrackDossier({
   const Icon = track.icon
   const tone = trackTone[track.id]
   const completedCount = track.nodes.filter((n) => completed.has(n.id)).length
+  const trackLocked = isTrackActionLocked(track.id, engagedTracks)
 
   return (
     <article
       className={cn(
         'dossier rise-in relative overflow-hidden rounded-sm px-4 pb-5 pt-7 sm:px-6',
+        trackLocked && 'opacity-65 saturate-50',
       )}
       style={{ animationDelay: `${index * 70}ms` }}
+      aria-disabled={trackLocked}
     >
       <header className="mb-4 flex items-start gap-3">
         <div
@@ -864,6 +1007,16 @@ function TrackDossier({
 
       <div className="divider-stitched mb-4" />
 
+      {trackLocked && (
+        <div className="mb-4 flex items-start gap-2 rounded-sm border border-dashed border-[var(--line-strong)] bg-[rgba(28,20,16,0.04)] px-3 py-2">
+          <Lock className="mt-0.5 size-3.5 shrink-0 text-[var(--ink-fade)]" />
+          <p className="font-mono text-[10px] uppercase leading-snug tracking-mono text-[var(--ink-fade)]">
+            Locked — you’ve already used both actions this turn. Reset or undo
+            another track to take this one.
+          </p>
+        </div>
+      )}
+
       <ol className="relative flex flex-col">
         {track.nodes.map((node, nodeIndex) => {
           const isLast = nodeIndex === track.nodes.length - 1
@@ -879,7 +1032,7 @@ function TrackDossier({
                 tone={tone}
                 selected={selectedNodeId === node.id}
                 complete={completed.has(node.id)}
-                locked={isNodeLocked(node, completed)}
+                locked={isNodeLocked(node, completed, engagedTracks)}
                 onSelect={onSelect}
                 onToggleComplete={onToggleComplete}
               />
@@ -1008,6 +1161,33 @@ function FlowCard({
   )
 }
 
+const END_TURN_ANCHOR_ID = 'end-the-action'
+
+function EndTurnFab({ visible }: { visible: boolean }) {
+  const scrollToEnd = () => {
+    const el = document.getElementById(END_TURN_ANCHOR_ID)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+  return (
+    <button
+      type="button"
+      onClick={scrollToEnd}
+      aria-label="Jump to End the Action"
+      tabIndex={visible ? 0 : -1}
+      className={cn(
+        'fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full border-2 border-[var(--ink)] bg-[var(--rust)] px-4 py-3 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--bone)] shadow-[0_6px_18px_rgba(28,20,16,0.35)] transition-all duration-200 active:scale-95 hover:translate-y-[-1px]',
+        'pb-[max(0.75rem,env(safe-area-inset-bottom))]',
+        visible
+          ? 'opacity-100 translate-y-0 pointer-events-auto'
+          : 'opacity-0 translate-y-3 pointer-events-none',
+      )}
+    >
+      <ArrowDown className="size-4 animate-bounce" strokeWidth={2.5} />
+      <span>End the Action</span>
+    </button>
+  )
+}
+
 function EndStamp({
   complete,
   onTap,
@@ -1018,7 +1198,7 @@ function EndStamp({
   onToggleComplete: () => void
 }) {
   return (
-    <section className="mt-7">
+    <section id={END_TURN_ANCHOR_ID} className="scroll-mt-24 mt-7">
       <div className="flex items-center gap-2">
         <span className="h-px flex-1 bg-[var(--line-strong)]" />
         <span className="serial">FINALE</span>
