@@ -701,6 +701,49 @@ function StampPill({
   )
 }
 
+type ConnectorKind = 'sequence' | 'branch-start' | 'or'
+
+function getConnectorKind(prev: FlowNode, current: FlowNode): ConnectorKind {
+  if (prev.next?.includes(current.id)) {
+    return (prev.next.length ?? 0) > 1 ? 'branch-start' : 'sequence'
+  }
+  return 'or'
+}
+
+function Connector({ kind }: { kind: ConnectorKind }) {
+  if (kind === 'or') {
+    return (
+      <div
+        className="relative my-3 flex items-center justify-center"
+        aria-hidden="true"
+      >
+        <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-[var(--line-strong)] opacity-70" />
+        <span className="relative bg-[var(--parchment)] px-3 font-display text-[0.78rem] uppercase tracking-[0.32em] text-[var(--rust-deep)]">
+          — or —
+        </span>
+      </div>
+    )
+  }
+  if (kind === 'branch-start') {
+    return (
+      <div
+        className="my-2 flex flex-col items-center gap-0.5"
+        aria-hidden="true"
+      >
+        <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--ink-fade)]">
+          Pick one
+        </span>
+        <span className="route-line h-6" />
+      </div>
+    )
+  }
+  return (
+    <div className="my-2 flex justify-center" aria-hidden="true">
+      <span className="route-line h-7" />
+    </div>
+  )
+}
+
 function TrackDossier({
   track,
   index,
@@ -760,6 +803,10 @@ function TrackDossier({
       <ol className="relative flex flex-col">
         {track.nodes.map((node, nodeIndex) => {
           const isLast = nodeIndex === track.nodes.length - 1
+          const nextNode = isLast ? null : track.nodes[nodeIndex + 1]
+          const connectorKind = nextNode
+            ? getConnectorKind(node, nextNode)
+            : null
           return (
             <li key={node.id} className="relative">
               <FlowCard
@@ -771,11 +818,7 @@ function TrackDossier({
                 onSelect={onSelect}
                 onToggleComplete={onToggleComplete}
               />
-              {!isLast && (
-                <div className="my-2 flex justify-center">
-                  <span className="route-line h-7" aria-hidden="true" />
-                </div>
-              )}
+              {connectorKind && <Connector kind={connectorKind} />}
             </li>
           )
         })}
