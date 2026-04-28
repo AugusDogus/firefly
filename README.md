@@ -41,9 +41,3 @@ bun run check
 - `src/styles.css`: design tokens, paper texture, type stack
 - `src/components/ui/`: shadcn primitives
 - `public/serenity.png`: favicon / PWA icon
-
-## Adding shadcn components
-
-```bash
-bunx shadcn@latest add <component>
-```
